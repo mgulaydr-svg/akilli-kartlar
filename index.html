@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Akıllı Kartlar</title>
+  <title>Akıllı Kartlar v3</title>
   <style>
     :root {
       --bg: #f5f7fb;
@@ -192,6 +192,10 @@
               <input id="deckDescription" placeholder="Kısa açıklama">
             </div>
             <button class="btn" id="addDeckBtn">Deste ekle</button>
+            <div style="margin-top:16px">
+              <h3 style="margin:0 0 8px">Mevcut desteler</h3>
+              <div id="decksList" class="muted small">Henüz deste yok.</div>
+            </div>
           </div>
           <div class="card">
             <h2>Kart ekle / düzenle</h2>
@@ -344,6 +348,7 @@
   async function loadAll() {
     await Promise.all([loadDecks(), loadCards()]);
     renderDeckOptions();
+    renderDeckList();
     renderCards();
     renderStats();
   }
@@ -367,6 +372,40 @@
       $(id).innerHTML = placeholder + opts;
     });
   }
+
+  function renderDeckList() {
+    if (!$('decksList')) return;
+    if (!decks.length) {
+      $('decksList').innerHTML = 'Henüz deste yok.';
+      return;
+    }
+    $('decksList').innerHTML = decks.map(d => {
+      const count = cards.filter(c => c.deckId === d.id).length;
+      return `
+        <div class="deck-row" style="display:flex;gap:8px;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px;background:rgba(148,163,184,.08)">
+          <div>
+            <strong>${escapeHtml(d.title || 'Adsız deste')}</strong><br>
+            <span class="muted small">${count} kart${d.description ? ' · ' + escapeHtml(d.description) : ''}</span>
+          </div>
+          <button class="btn danger small" onclick="removeDeck('${d.id}')">Sil</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.removeDeck = async id => {
+    const d = decks.find(x => x.id === id);
+    if (!d) return;
+    const deckCards = cards.filter(c => c.deckId === id);
+    const msg = deckCards.length
+      ? `“${d.title}” destesini ve içindeki ${deckCards.length} kartı silmek istiyor musun? Bu işlem geri alınamaz.`
+      : `“${d.title}” destesi silinsin mi?`;
+    if (!confirm(msg)) return;
+    await Promise.all(deckCards.map(c => updateDoc(doc(db, 'cards', c.id), { isDeleted: true, updatedAt: serverTimestamp() })));
+    await deleteDoc(doc(db, 'decks', id));
+    await loadAll();
+    showMessage('Deste silindi.');
+  };
 
   $('addDeckBtn').onclick = async () => {
     const title = $('deckTitle').value.trim();
