@@ -576,25 +576,159 @@
     return arr.map(normalizeImport).filter(x => x.front && x.back);
   }
   function parseCsv(text) {
-    const lines = text.split(/\r?\n/).filter(Boolean);
-    const headers = splitCsv(lines.shift()).map(h => h.trim());
-    return lines.map(line => {
-      const cols = splitCsv(line);
+    const rows = parseCsvRows(text);
+    if (!rows.length) return [];
+
+    const headers = rows.shift().map(h => cleanHeader(h));
+    const hasHeader = headers.some(h => headerMap[h]);
+
+    const dataRows = hasHeader ? rows : [headers, ...rows];
+    const finalHeaders = hasHeader ? headers : ['front', 'back', 'explanation', 'example', 'tags'];
+
+    return dataRows.map(cols => {
       const obj = {};
-      headers.forEach((h,i) => obj[h] = cols[i] || '');
+      finalHeaders.forEach((h, i) => {
+        const mapped = headerMap[h] || h;
+        obj[mapped] = cols[i] || '';
+      });
+
+      // NotebookLM / Quizlet benzeri bazı dışa aktarımlar tek sütunda "Soru - Cevap" verebilir.
+      if (!obj.front && !obj.back && cols.length === 1) {
+        const one = cols[0] || '';
+        const parts = one.split(/\s+(?:[-–—]|→|=>)\s+/);
+        if (parts.length >= 2) {
+          obj.front = parts.shift();
+          obj.back = parts.join(' - ');
+        }
+      }
+
       return normalizeImport(obj);
     }).filter(x => x.front && x.back);
   }
-  function splitCsv(line) {
-    const out = []; let cur = ''; let q = false;
-    for (let i=0; i<line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') { q = !q; continue; }
-      if (ch === ',' && !q) { out.push(cur); cur = ''; continue; }
+
+  const headerMap = {
+    'front': 'front',
+    'on': 'front',
+    'ön': 'front',
+    'on yuz': 'front',
+    'ön yüz': 'front',
+    'soru': 'front',
+    'question': 'front',
+    'prompt': 'front',
+    'term': 'front',
+    'kavram': 'front',
+    'baslik': 'front',
+    'başlık': 'front',
+    'card front': 'front',
+    'notebooklm question': 'front',
+
+    'back': 'back',
+    'arka': 'back',
+    'arka yuz': 'back',
+    'arka yüz': 'back',
+    'cevap': 'back',
+    'answer': 'back',
+    'definition': 'back',
+    'tanim': 'back',
+    'tanım': 'back',
+    'aciklama': 'back',
+    'açıklama': 'back',
+    'icerik': 'back',
+    'içerik': 'back',
+    'card back': 'back',
+    'notebooklm answer': 'back',
+
+    'explanation': 'explanation',
+    'ek aciklama': 'explanation',
+    'ek açıklama': 'explanation',
+    'detail': 'explanation',
+    'details': 'explanation',
+    'notes': 'explanation',
+    'notlar': 'explanation',
+
+    'example': 'example',
+    'ornek': 'example',
+    'örnek': 'example',
+    'examples': 'example',
+
+    'tags': 'tags',
+    'tag': 'tags',
+    'etiket': 'tags',
+    'etiketler': 'tags',
+    'deck': 'tags',
+    'kategori': 'tags'
+  };
+
+  function cleanHeader(h) {
+    return String(h || '')
+      .replace(/^\uFEFF/, '')
+      .trim()
+      .toLowerCase()
+      .replace(/^"|"$/g, '')
+      .replace(/_/g, ' ')
+      .replace(/\s+/g, ' ');
+  }
+
+  function detectDelimiter(text) {
+    const sample = text.slice(0, 3000);
+    const candidates = [',', ';', '\t'];
+    let best = ',';
+    let bestCount = -1;
+    for (const c of candidates) {
+      let count = 0, q = false;
+      for (let i = 0; i < sample.length; i++) {
+        const ch = sample[i];
+        if (ch === '"') {
+          if (sample[i+1] === '"') { i++; continue; }
+          q = !q;
+        } else if (ch === c && !q) count++;
+      }
+      if (count > bestCount) { bestCount = count; best = c; }
+    }
+    return best;
+  }
+
+  function parseCsvRows(text) {
+    const delimiter = detectDelimiter(text);
+    const rows = [];
+    let row = [], cur = '', q = false;
+    text = String(text || '').replace(/^\uFEFF/, '');
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const next = text[i + 1];
+
+      if (ch === '"') {
+        if (q && next === '"') { cur += '"'; i++; }
+        else { q = !q; }
+        continue;
+      }
+
+      if (ch === delimiter && !q) {
+        row.push(cur.trim());
+        cur = '';
+        continue;
+      }
+
+      if ((ch === '\n' || ch === '\r') && !q) {
+        if (ch === '\r' && next === '\n') i++;
+        row.push(cur.trim());
+        if (row.some(v => v !== '')) rows.push(row);
+        row = [];
+        cur = '';
+        continue;
+      }
+
       cur += ch;
     }
-    out.push(cur);
-    return out.map(x => x.trim());
+
+    row.push(cur.trim());
+    if (row.some(v => v !== '')) rows.push(row);
+    return rows;
+  }
+
+  function splitCsv(line) {
+    return parseCsvRows(line)[0] || [];
   }
   function parseTxt(text) {
     const blocks = text.split(/\n\s*\n/);
