@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Akıllı Kartlar v3</title>
+  <title>Akıllı Kartlar v4</title>
   <style>
     :root {
       --bg: #f5f7fb;
@@ -75,6 +75,13 @@
     .flex { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
     .preview-list { max-height: 420px; overflow:auto; }
     .small { font-size: 13px; }
+
+    .deck-cloud { margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--border); }
+    .deck-cloud-title { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .deck-chip { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--border); border-radius:999px; padding:8px 12px; margin:4px; background: rgba(37,99,235,.08); cursor:pointer; font-weight:700; }
+    .deck-chip:hover { background: rgba(37,99,235,.16); }
+    .deck-chip .count { font-size:12px; color: var(--muted); font-weight:700; }
+    .edit-badge { display:inline-flex; align-items:center; border-radius:999px; padding:4px 8px; background:rgba(37,99,235,.10); color:var(--primary); font-size:12px; margin-left:6px; }
     @media (max-width: 780px) {
       .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
       .topbar { align-items:flex-start; flex-direction: column; }
@@ -198,7 +205,7 @@
             </div>
           </div>
           <div class="card">
-            <h2>Kart ekle / düzenle</h2>
+            <h2>Kart ekle / düzenle <span id="editStatus" class="edit-badge hidden">Düzenleme modu</span></h2>
             <input id="editingCardId" type="hidden">
             <div class="form-row">
               <label>Deste</label>
@@ -268,6 +275,14 @@
           <h2>Önizleme</h2>
           <div id="importPreview" class="muted">Henüz dosya seçilmedi.</div>
         </div>
+      </div>
+
+      <div class="deck-cloud" id="deckCloudWrap">
+        <div class="deck-cloud-title">
+          <strong>Deste bulutu</strong>
+          <span class="muted small">Bir desteye tıklayarak o desteyi çalışmaya hazırla.</span>
+        </div>
+        <div id="deckCloud" class="muted small">Henüz deste yok.</div>
       </div>
     </section>
   </div>
@@ -349,6 +364,7 @@
     await Promise.all([loadDecks(), loadCards()]);
     renderDeckOptions();
     renderDeckList();
+    renderDeckCloud();
     renderCards();
     renderStats();
   }
@@ -393,6 +409,30 @@
     }).join('');
   }
 
+  function renderDeckCloud() {
+    if (!$('deckCloud')) return;
+    if (!decks.length) {
+      $('deckCloud').innerHTML = 'Henüz deste yok.';
+      return;
+    }
+    $('deckCloud').innerHTML = decks.map(d => {
+      const count = cards.filter(c => c.deckId === d.id).length;
+      const due = cards.filter(c => c.deckId === d.id && toDate(c.dueDate) <= now()).length;
+      return `<button class="deck-chip" onclick="selectDeckFromCloud('${d.id}')">
+        ${escapeHtml(d.title || 'Adsız deste')}
+        <span class="count">${count} kart${due ? ' · ' + due + ' bugün' : ''}</span>
+      </button>`;
+    }).join('');
+  }
+
+  window.selectDeckFromCloud = id => {
+    if ($('studyDeckSelect')) $('studyDeckSelect').value = id;
+    if ($('cardDeckSelect')) $('cardDeckSelect').value = id;
+    if ($('importDeckSelect')) $('importDeckSelect').value = id;
+    switchView('study');
+    prepareStudy();
+  };
+
   window.removeDeck = async id => {
     const d = decks.find(x => x.id === id);
     if (!d) return;
@@ -430,7 +470,8 @@
     if (!deckId) return showMessage('Önce bir deste seçmelisin.', 'error');
     if (!front || !back) return showMessage('Soru ve cevap alanları zorunludur.', 'error');
 
-    const data = {
+    const editingId = $('editingCardId').value;
+    const baseData = {
       userId: currentUser.uid,
       deckId,
       front,
@@ -438,21 +479,24 @@
       explanation: $('explanationInput').value.trim(),
       example: $('exampleInput').value.trim(),
       tags: normalizeTags($('tagsInput').value),
-      difficulty: 'new',
-      interval: 0,
-      repetitions: 0,
-      easeFactor: 2.5,
-      dueDate: Timestamp.fromDate(now()),
       updatedAt: serverTimestamp(),
       isDeleted: false
     };
-    const editingId = $('editingCardId').value;
     if (editingId) {
-      await updateDoc(doc(db, 'cards', editingId), data);
-      showMessage('Kart güncellendi.');
+      // Kart metnini düzeltirken öğrenme geçmişini sıfırlamıyoruz.
+      await updateDoc(doc(db, 'cards', editingId), baseData);
+      showMessage('Kart güncellendi. Öğrenme geçmişi korundu.');
     } else {
-      data.createdAt = serverTimestamp();
-      await addDoc(collection(db, 'cards'), data);
+      await addDoc(collection(db, 'cards'), {
+        ...baseData,
+        difficulty: 'new',
+        interval: 0,
+        repetitions: 0,
+        easeFactor: 2.5,
+        dueDate: Timestamp.fromDate(now()),
+        createdAt: serverTimestamp(),
+        lastReviewedAt: null
+      });
       showMessage('Kart eklendi.');
     }
     clearCardForm();
@@ -462,6 +506,8 @@
   $('clearCardBtn').onclick = clearCardForm;
   function clearCardForm() {
     ['editingCardId','frontInput','backInput','explanationInput','exampleInput','tagsInput'].forEach(id => $(id).value = '');
+    if ($('editStatus')) $('editStatus').classList.add('hidden');
+    if ($('saveCardBtn')) $('saveCardBtn').textContent = 'Kartı kaydet';
   }
 
   $('searchCardsInput').oninput = renderCards;
@@ -493,6 +539,8 @@
     $('explanationInput').value = c.explanation || '';
     $('exampleInput').value = c.example || '';
     $('tagsInput').value = (c.tags || []).join(', ');
+    $('editStatus').classList.remove('hidden');
+    $('saveCardBtn').textContent = 'Kartı güncelle';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
