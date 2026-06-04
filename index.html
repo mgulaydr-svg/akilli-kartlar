@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Akıllı Kartlar v8</title>
+  <title>Akıllı Kartlar v9</title>
   <style>
     :root {
       --bg: #f5f7fb;
@@ -50,6 +50,7 @@
     .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .grid-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
     .card { background: var(--panel); border: 1px solid var(--border); border-radius: 22px; padding: 18px; box-shadow: var(--soft); }
     .btn { border: 0; border-radius: 14px; padding: 11px 14px; cursor:pointer; font-weight: 700; background: var(--primary); color: white; display:inline-flex; align-items:center; gap:8px; justify-content:center; }
     .btn:hover { background: var(--primary-dark); }
@@ -65,6 +66,9 @@
     .form-row { display:grid; gap:12px; margin-bottom: 12px; }
     .nav { display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 18px; }
     .stat { padding: 16px; border-radius: 20px; background: linear-gradient(180deg, rgba(37,99,235,.10), rgba(124,58,237,.06)); border: 1px solid var(--border); }
+    .stat.clickable { cursor:pointer; transition: transform .12s ease, box-shadow .12s ease; }
+    .stat.clickable:hover { transform: translateY(-2px); box-shadow: var(--soft); }
+    .stat.green { background: linear-gradient(180deg, rgba(22,163,74,.16), rgba(34,197,94,.08)); border-color: rgba(22,163,74,.30); }
     .stat strong { display:block; font-size: 30px; margin-top: 6px; }
     .table { width:100%; border-collapse: collapse; }
     .table th, .table td { padding: 10px; border-bottom: 1px solid var(--border); text-align:left; vertical-align: top; }
@@ -92,7 +96,8 @@
     .deck-tree-child { margin:8px 0 0 18px; padding:8px 10px; border-left:3px solid rgba(37,99,235,.35); background:rgba(148,163,184,.08); border-radius:10px; }
     .mini-label { display:inline-flex; border-radius:999px; border:1px solid var(--border); padding:3px 8px; font-size:11px; color:var(--muted); font-weight:800; }
     @media (max-width: 780px) {
-      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .grid-4, .grid-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .topbar { align-items:flex-start; flex-direction: column; }
       .front { font-size: 22px; }
       .brand { gap: 10px; }
@@ -157,11 +162,12 @@
       </div>
 
       <div id="dashboardView">
-        <div class="grid grid-4">
+        <div class="grid grid-5">
           <div class="stat"><span class="muted">Toplam kart</span><strong id="statCards">0</strong></div>
           <div class="stat"><span class="muted">Bugün çalışılacak</span><strong id="statDue">0</strong></div>
           <div class="stat"><span class="muted">Desteler</span><strong id="statDecks">0</strong></div>
-          <div class="stat"><span class="muted">Zor kartlar</span><strong id="statHard">0</strong></div>
+          <div class="stat clickable" id="hardStatCard" title="Sadece zor kartları çalış"><span class="muted">Zor kartlar</span><strong id="statHard">0</strong></div>
+          <div class="stat clickable green" id="learnedStatCard" title="Öğrenilmiş kartları listele"><span class="muted">Öğrenilmiş kartlar</span><strong id="statLearned">0</strong></div>
         </div>
         <div class="grid grid-2" style="margin-top:16px">
           <div class="card">
@@ -214,6 +220,8 @@
             <button class="btn secondary" id="nextCardBtn">İleri →</button>
             <button class="btn secondary" id="editStudyCardBtn">Kartı düzenle</button>
             <button class="btn danger" id="deleteStudyCardBtn">Kartı sil</button>
+            <select id="studyCardDeckSelect" style="max-width:280px"></select>
+            <button class="btn secondary" id="moveStudyCardBtn">Desteyi değiştir</button>
           </div>
         </div>
       </div>
@@ -292,6 +300,8 @@
         <div class="card" style="margin-top:16px">
           <div class="flex">
             <h2>Kartlar</h2>
+            <span id="cardsFilterInfo" class="mini-label hidden">Tüm kartlar</span>
+            <button class="btn secondary small hidden" id="clearCardsFilterBtn">Filtreyi temizle</button>
             <input id="searchCardsInput" placeholder="Kart ara..." style="max-width:280px" class="right">
           </div>
           <div style="overflow:auto">
@@ -366,6 +376,8 @@
   let dueCards = [];
   let currentStudyIndex = 0;
   let importRows = [];
+  let studyMode = 'due';
+  let cardListFilter = 'all';
 
   const $ = id => document.getElementById(id);
   const showMessage = (text, type='info') => {
@@ -391,8 +403,9 @@
     ['dashboard','study','manage','import'].forEach(v => $(v+'View').classList.toggle('hidden', v !== view));
     if (view === 'study') prepareStudy();
     if (view === 'dashboard') renderStats();
+    if (view === 'manage') renderCards();
   }
-  document.querySelectorAll('[data-view]').forEach(btn => btn.onclick = () => switchView(btn.dataset.view));
+  document.querySelectorAll('[data-view]').forEach(btn => btn.onclick = () => { if (btn.dataset.view === 'study') studyMode = 'due'; switchView(btn.dataset.view); });
 
   $('loginBtn').onclick = async () => {
     try { await signInWithEmailAndPassword(auth, $('emailInput').value.trim(), $('passwordInput').value); }
@@ -437,6 +450,12 @@
   }
   function sortByCreatedDesc(a, b) {
     return toDate(b.createdAt) - toDate(a.createdAt);
+  }
+  function isLearned(card) {
+    return !!(card && (card.learned === true || card.difficulty === 'learned'));
+  }
+  function isHard(card) {
+    return !!(card && !isLearned(card) && ((card.difficulty === 'hard') || (card.easeFactor || 2.5) < 2));
   }
 
   async function loadDecks() {
@@ -510,6 +529,7 @@
     }).join('');
     $('cardDeckSelect').innerHTML = '<option value="">Küçük deste seç</option>' + deckOptionHtml;
     $('importDeckSelect').innerHTML = '<option value="">Küçük deste seç</option>' + deckOptionHtml;
+    if ($('studyCardDeckSelect')) $('studyCardDeckSelect').innerHTML = '<option value="">Kartın destesini değiştir</option>' + deckOptionHtml;
   }
 
   function renderStudySubOptions() {
@@ -673,6 +693,9 @@
         interval: 0,
         repetitions: 0,
         easeFactor: 2.5,
+        easyCount: 0,
+        learned: false,
+        learnedAt: null,
         dueDate: Timestamp.fromDate(now()),
         lastReviewedAt: null,
         createdAt: serverTimestamp(),
@@ -760,6 +783,9 @@
         interval: 0,
         repetitions: 0,
         easeFactor: 2.5,
+        easyCount: 0,
+        learned: false,
+        learnedAt: null,
         dueDate: Timestamp.fromDate(now()),
         createdAt: serverTimestamp(),
         lastReviewedAt: null
@@ -781,22 +807,42 @@
 
   function renderCards() {
     const term = $('searchCardsInput').value?.toLowerCase() || '';
-    const filtered = cards.filter(c => [c.front,c.back,(c.tags||[]).join(' '), decks.find(d=>d.id===c.deckId)?.title || ''].join(' ').toLowerCase().includes(term));
+    let filtered = cards;
+    let label = 'Tüm kartlar';
+    if (cardListFilter === 'learned') {
+      filtered = filtered.filter(c => isMine(c) && isLearned(c));
+      label = 'Öğrenilmiş kartlar';
+    } else if (cardListFilter === 'hard') {
+      filtered = filtered.filter(c => isMine(c) && isHard(c));
+      label = 'Zor kartlar';
+    }
+    filtered = filtered.filter(c => [c.front,c.back,(c.tags||[]).join(' '), decks.find(d=>d.id===c.deckId)?.title || ''].join(' ').toLowerCase().includes(term));
+    if ($('cardsFilterInfo')) {
+      $('cardsFilterInfo').textContent = label;
+      $('cardsFilterInfo').classList.toggle('hidden', cardListFilter === 'all');
+    }
+    if ($('clearCardsFilterBtn')) $('clearCardsFilterBtn').classList.toggle('hidden', cardListFilter === 'all');
     $('cardsTable').innerHTML = filtered.map(c => {
       const deck = decks.find(d=>d.id===c.deckId);
+      const learnedLabel = isLearned(c) ? '<span class="mini-label" style="color:var(--ok);border-color:rgba(22,163,74,.35)">öğrenilmiş</span>' : '';
       const actions = isMine(c)
         ? `<button class="btn secondary small" onclick="editCard('${c.id}')">Düzenle</button> <button class="btn danger small" onclick="removeCard('${c.id}')">Sil</button>`
         : `<span class="muted small">Salt okunur</span>`;
       return `
       <tr>
-        <td><strong>${escapeHtml(c.front)}</strong><br><span class="muted small">${escapeHtml(deck?.title || 'Deste yok')} ${ownerBadge(c)}</span></td>
+        <td><strong>${escapeHtml(c.front)}</strong><br><span class="muted small">${escapeHtml(deckPath(c.deckId))} ${ownerBadge(c)} ${learnedLabel}</span></td>
         <td>${escapeHtml(c.back).slice(0,160)}</td>
         <td>${(c.tags||[]).map(t=>`<span class="pill">${escapeHtml(t)}</span>`).join('')}</td>
-        <td class="small">${isMine(c) ? `Tekrar: ${c.repetitions || 0}<br>Aralık: ${c.interval || 0} gün` : 'Paylaşılan kart'}</td>
+        <td class="small">${isMine(c) ? `Tekrar: ${c.repetitions || 0}<br>Çok iyi: ${c.easyCount || 0}/3<br>Aralık: ${c.interval || 0} gün` : 'Paylaşılan kart'}</td>
         <td>${actions}</td>
       </tr>`;
-    }).join('') || '<tr><td colspan="5" class="muted">Henüz kart yok.</td></tr>';
+    }).join('') || '<tr><td colspan="5" class="muted">Bu filtrede kart yok.</td></tr>';
   }
+
+  if ($('clearCardsFilterBtn')) $('clearCardsFilterBtn').onclick = () => {
+    cardListFilter = 'all';
+    renderCards();
+  };
 
   window.editCard = id => {
     const c = cards.find(x => x.id === id);
@@ -827,13 +873,27 @@
     const today = now();
     const myCards = cards.filter(isMine);
     const myDecks = decks.filter(isMine);
-    const due = myCards.filter(c => toDate(c.dueDate) <= today).length;
-    const hard = myCards.filter(c => (c.difficulty === 'hard') || (c.easeFactor || 2.5) < 2).length;
+    const learned = myCards.filter(isLearned).length;
+    const due = myCards.filter(c => !isLearned(c) && toDate(c.dueDate) <= today).length;
+    const hard = myCards.filter(isHard).length;
     $('statCards').textContent = myCards.length;
     $('statDue').textContent = due;
     $('statDecks').textContent = `${myDecks.length}/${decks.length}`;
     $('statHard').textContent = hard;
+    if ($('statLearned')) $('statLearned').textContent = learned;
   }
+
+  if ($('hardStatCard')) $('hardStatCard').onclick = () => {
+    studyMode = 'hard';
+    switchView('study');
+    showMessage('Sadece zor kartlar çalışma moduna geçildi.');
+  };
+  if ($('learnedStatCard')) $('learnedStatCard').onclick = () => {
+    cardListFilter = 'learned';
+    switchView('manage');
+    renderCards();
+    showMessage('Öğrenilmiş kartlar listelendi. Bu kartlar otomatik çalışma akışında gösterilmez.');
+  };
 
   function toDate(value) {
     if (!value) return new Date(0);
@@ -848,7 +908,13 @@
     let allowedDeckIds = null;
     if (subId) allowedDeckIds = [subId];
     else if (mainId) allowedDeckIds = deckIdsUnder(mainId);
-    dueCards = cards.filter(c => (!allowedDeckIds || allowedDeckIds.includes(c.deckId)) && (isMine(c) ? toDate(c.dueDate) <= now() : true));
+
+    if (studyMode === 'hard') {
+      dueCards = cards.filter(c => isMine(c) && isHard(c) && (!allowedDeckIds || allowedDeckIds.includes(c.deckId)));
+    } else {
+      studyMode = 'due';
+      dueCards = cards.filter(c => (!allowedDeckIds || allowedDeckIds.includes(c.deckId)) && !isLearned(c) && (isMine(c) ? toDate(c.dueDate) <= now() : true));
+    }
     currentStudyIndex = 0;
     renderStudyCard();
   }
@@ -858,6 +924,7 @@
   function renderStudyCard() {
     const c = dueCards[currentStudyIndex];
     const empty = !c;
+    if ($('studyEmpty')) $('studyEmpty').textContent = studyMode === 'hard' ? 'Bu seçimde zor kart yok. Zor kartlar oluştuğunda buradan çalışabilirsin.' : 'Bugün çalışılacak kart yok. Yeni kart ekleyebilir veya farklı bir deste seçebilirsin.';
     $('studyEmpty').classList.toggle('hidden', !empty);
     $('studyBox').classList.toggle('hidden', empty);
     $('studyControls').classList.toggle('hidden', empty);
@@ -865,7 +932,8 @@
     $('studyProgressText').textContent = empty ? '0 / 0' : `${currentStudyIndex + 1} / ${dueCards.length}`;
     const mainId = $('studyMainDeckSelect')?.value || '';
     const subId = $('studySubDeckSelect')?.value || '';
-    $('studyDeckPath').textContent = subId ? deckPath(subId) : mainId ? deckPath(mainId) + ' / tüm alt konular' : 'Tüm desteler';
+    const modeText = studyMode === 'hard' ? 'Zor kartlar · ' : '';
+    $('studyDeckPath').textContent = modeText + (subId ? deckPath(subId) : mainId ? deckPath(mainId) + ' / tüm alt konular' : 'Tüm desteler');
     if (empty) return;
     $('studyFront').textContent = c.front;
     $('studyBack').textContent = c.back;
@@ -878,6 +946,11 @@
     $('nextCardBtn').disabled = currentStudyIndex >= dueCards.length - 1;
     $('editStudyCardBtn').disabled = !isMine(c);
     $('deleteStudyCardBtn').disabled = !isMine(c);
+    if ($('studyCardDeckSelect')) {
+      $('studyCardDeckSelect').disabled = !isMine(c);
+      $('studyCardDeckSelect').value = isMine(c) ? (c.deckId || '') : '';
+    }
+    if ($('moveStudyCardBtn')) $('moveStudyCardBtn').disabled = !isMine(c);
   }
 
   $('showAnswerBtn').onclick = () => {
@@ -905,6 +978,21 @@
     switchView('manage');
     editCard(c.id);
   };
+  $('moveStudyCardBtn').onclick = async () => {
+    const c = dueCards[currentStudyIndex];
+    if (!c) return;
+    if (!isMine(c)) return showMessage('Paylaşılan kartın destesini değiştiremezsin. Önce desteyi kendi hesabına kopyala.', 'error');
+    const newDeckId = $('studyCardDeckSelect').value;
+    if (!newDeckId) return showMessage('Kartı taşıyacağın desteyi seçmelisin.', 'error');
+    const newDeck = decks.find(d => d.id === newDeckId);
+    if (!newDeck || !isMine(newDeck)) return showMessage('Kartı sadece kendi destelerine taşıyabilirsin.', 'error');
+    if (newDeckId === c.deckId) return showMessage('Kart zaten bu destede.');
+    await updateDoc(doc(db, 'cards', c.id), { deckId: newDeckId, updatedAt: serverTimestamp() });
+    showMessage('Kartın destesi değiştirildi.');
+    await loadAll();
+    prepareStudy();
+  };
+
   $('deleteStudyCardBtn').onclick = async () => {
     const c = dueCards[currentStudyIndex];
     if (!c) return;
@@ -942,6 +1030,7 @@
       });
       await loadCards();
       renderStats();
+      renderCards();
       renderDeckCloud();
     } else {
       showMessage('Bu paylaşılan kart salt okunur çalışıldı. İlerleme kaydı için desteyi kendi hesabına kopyala.');
@@ -955,10 +1044,13 @@
     let reps = card.repetitions || 0;
     let interval = card.interval || 0;
     let difficulty = 'learning';
+    let easyCount = card.easyCount || 0;
+    let learned = isLearned(card);
+    let learnedAt = card.learnedAt || null;
 
     if (rating === 0) {
       reps = 0; interval = 0; ease = Math.max(1.3, ease - 0.35); difficulty = 'hard';
-      return { easeFactor: ease, repetitions: reps, interval, difficulty, dueDate: Timestamp.fromDate(futureDate(0)) };
+      return { easeFactor: ease, repetitions: reps, interval, difficulty, easyCount, learned: false, learnedAt: null, dueDate: Timestamp.fromDate(futureDate(0)) };
     }
     if (rating === 1) {
       reps = Math.max(0, reps); interval = 1; ease = Math.max(1.3, ease - 0.2); difficulty = 'hard';
@@ -967,9 +1059,18 @@
     } else if (rating === 3) {
       reps += 1; interval = reps === 1 ? 2 : Math.max(3, Math.round((interval || 2) * ease)); ease = Math.min(3.0, ease + 0.05); difficulty = 'good';
     } else {
-      reps += 1; interval = reps === 1 ? 4 : Math.max(5, Math.round((interval || 3) * (ease + 0.35))); ease = Math.min(3.2, ease + 0.15); difficulty = 'easy';
+      reps += 1;
+      easyCount += 1;
+      if (easyCount >= 3) {
+        learned = true;
+        learnedAt = Timestamp.fromDate(now());
+        difficulty = 'learned';
+        interval = 3650;
+        return { easeFactor: Math.min(3.2, ease + 0.15), repetitions: reps, interval, difficulty, easyCount, learned, learnedAt, dueDate: Timestamp.fromDate(futureDate(3650)) };
+      }
+      interval = reps === 1 ? 4 : Math.max(5, Math.round((interval || 3) * (ease + 0.35))); ease = Math.min(3.2, ease + 0.15); difficulty = 'easy';
     }
-    return { easeFactor: ease, repetitions: reps, interval, difficulty, dueDate: Timestamp.fromDate(futureDate(interval)) };
+    return { easeFactor: ease, repetitions: reps, interval, difficulty, easyCount, learned, learnedAt, dueDate: Timestamp.fromDate(futureDate(interval)) };
   }
 
   $('parseImportBtn').onclick = async () => {
@@ -1206,6 +1307,9 @@
         interval: 0,
         repetitions: 0,
         easeFactor: 2.5,
+        easyCount: 0,
+        learned: false,
+        learnedAt: null,
         dueDate: Timestamp.fromDate(now()),
         lastReviewedAt: null,
         createdAt: serverTimestamp(),
