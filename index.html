@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Akıllı Kartlar v6</title>
+  <title>Akıllı Kartlar v8</title>
   <style>
     :root {
       --bg: #f5f7fb;
@@ -86,6 +86,11 @@
     .deck-chip:hover { background: rgba(37,99,235,.16); }
     .deck-chip .count { font-size:12px; color: var(--muted); font-weight:700; }
     .edit-badge { display:inline-flex; align-items:center; border-radius:999px; padding:4px 8px; background:rgba(37,99,235,.10); color:var(--primary); font-size:12px; margin-left:6px; }
+    .study-meta { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:10px 0 2px; color:var(--muted); font-size:13px; }
+    .study-tools { border-top:1px dashed var(--border); padding-top:12px; margin-top:12px; }
+    .deck-tree-main { border:1px solid var(--border); border-radius:14px; padding:10px; margin-bottom:10px; background:rgba(37,99,235,.05); }
+    .deck-tree-child { margin:8px 0 0 18px; padding:8px 10px; border-left:3px solid rgba(37,99,235,.35); background:rgba(148,163,184,.08); border-radius:10px; }
+    .mini-label { display:inline-flex; border-radius:999px; border:1px solid var(--border); padding:3px 8px; font-size:11px; color:var(--muted); font-weight:800; }
     @media (max-width: 780px) {
       .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
       .topbar { align-items:flex-start; flex-direction: column; }
@@ -179,7 +184,13 @@
         <div class="card">
           <div class="flex">
             <h2>Çalışma Ekranı</h2>
-            <select id="studyDeckSelect" style="max-width:260px" class="right"></select>
+            <select id="studyMainDeckSelect" style="max-width:260px" class="right"></select>
+            <select id="studySubDeckSelect" style="max-width:260px"></select>
+          </div>
+          <p class="muted small" style="margin-top:6px">Önce büyük desteyi, sonra çalışmak istediğin küçük desteyi seç. Küçük deste seçmezsen büyük destenin tüm alt konuları birlikte çalışılır.</p>
+          <div class="study-meta">
+            <span id="studyDeckPath">Tüm desteler</span>
+            <span id="studyProgressText">0 / 0</span>
           </div>
           <div id="studyEmpty" class="notice hidden">Bugün çalışılacak kart yok. Yeni kart ekleyebilir veya farklı bir deste seçebilirsin.</div>
           <div id="studyBox" class="study-card">
@@ -198,24 +209,49 @@
             <button class="btn ok hidden rateBtn" data-rating="3">Biliyorum</button>
             <button class="btn ok hidden rateBtn" data-rating="4">Çok iyi biliyorum</button>
           </div>
+          <div class="flex study-tools" id="studyTools">
+            <button class="btn secondary" id="prevCardBtn">← Geri</button>
+            <button class="btn secondary" id="nextCardBtn">İleri →</button>
+            <button class="btn secondary" id="editStudyCardBtn">Kartı düzenle</button>
+            <button class="btn danger" id="deleteStudyCardBtn">Kartı sil</button>
+          </div>
         </div>
       </div>
 
       <div id="manageView" class="hidden">
         <div class="grid grid-2">
           <div class="card">
-            <h2>Deste oluştur</h2>
+            <h2>Deste yapısı</h2>
+            <p class="muted small">Büyük deste ana konuyu, küçük deste alt konuyu temsil eder. Kartları genellikle küçük destelere eklemen önerilir.</p>
             <div class="form-row">
-              <label>Deste adı</label>
-              <input id="deckTitle" placeholder="Örn. Flutter">
+              <label>Büyük deste adı</label>
+              <input id="mainDeckTitle" placeholder="Örn. Flutter">
             </div>
             <div class="form-row">
               <label>Açıklama</label>
-              <input id="deckDescription" placeholder="Kısa açıklama">
+              <input id="mainDeckDescription" placeholder="Ana konu açıklaması">
             </div>
-            <button class="btn" id="addDeckBtn">Deste ekle</button>
+            <button class="btn" id="addMainDeckBtn">Büyük deste ekle</button>
+
+            <div style="border-top:1px dashed var(--border);margin:16px 0;padding-top:16px">
+              <h3>Küçük deste / alt konu oluştur</h3>
+              <div class="form-row">
+                <label>Bağlı olacağı büyük deste</label>
+                <select id="subDeckParentSelect"></select>
+              </div>
+              <div class="form-row">
+                <label>Küçük deste adı</label>
+                <input id="subDeckTitle" placeholder="Örn. State Management">
+              </div>
+              <div class="form-row">
+                <label>Açıklama</label>
+                <input id="subDeckDescription" placeholder="Alt konu açıklaması">
+              </div>
+              <button class="btn secondary" id="addSubDeckBtn">Küçük deste ekle</button>
+            </div>
+
             <div style="margin-top:16px">
-              <h3 style="margin:0 0 8px">Mevcut desteler</h3>
+              <h3 style="margin:0 0 8px">Mevcut deste ağacı</h3>
               <div id="decksList" class="muted small">Henüz deste yok.</div>
             </div>
           </div>
@@ -295,8 +331,8 @@
       <div class="card deck-cloud" id="appDeckCloudWrap" style="margin-top:16px">
         <div class="deck-cloud-title">
           <div>
-            <strong>Tüm kullanıcıların deste bulutu</strong><br>
-            <span class="muted small">Kendi destelerin ve diğer kullanıcıların paylaştığı desteler burada görünür. Paylaşılan desteleri doğrudan değiştiremezsin; istersen kopyalayıp kendi hesabında düzenleyebilirsin.</span>
+            <strong>Büyük deste bulutu</strong><br>
+            <span class="muted small">Ana konu başlıkları burada listelenir. Bir büyük desteye tıklayınca çalışma ekranında o ana konunun tüm küçük desteleri seçilebilir.</span>
           </div>
           <span class="muted small" id="deckCloudSummary">0 deste</span>
         </div>
@@ -422,14 +458,71 @@
     cards = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(sortByCreatedDesc);
   }
 
+  function isMainDeck(d) {
+    return !d.parentId;
+  }
+  function childDecks(parentId) {
+    return decks.filter(d => d.parentId === parentId);
+  }
+  function getDeck(id) {
+    return decks.find(d => d.id === id);
+  }
+  function deckPath(deckOrId) {
+    const d = typeof deckOrId === 'string' ? getDeck(deckOrId) : deckOrId;
+    if (!d) return 'Deste yok';
+    const parent = d.parentId ? getDeck(d.parentId) : null;
+    return parent ? `${parent.title || 'Adsız büyük deste'} / ${d.title || 'Adsız küçük deste'}` : `${d.title || 'Adsız büyük deste'}`;
+  }
+  function deckIdsUnder(mainId) {
+    const ids = new Set([mainId]);
+    const walk = id => childDecks(id).forEach(ch => { ids.add(ch.id); walk(ch.id); });
+    walk(mainId);
+    return [...ids];
+  }
+  function countCardsForDeckTree(deckId) {
+    const ids = deckIdsUnder(deckId);
+    return cards.filter(c => ids.includes(c.deckId)).length;
+  }
+  function dueCardsForDeckTree(deckId) {
+    const ids = deckIdsUnder(deckId);
+    return cards.filter(c => ids.includes(c.deckId) && (isMine(c) ? toDate(c.dueDate) <= now() : true)).length;
+  }
+
   function renderDeckOptions() {
-    const placeholder = '<option value="">Deste seç</option>';
+    const placeholder = '<option value="">Seç</option>';
+    const mainDecks = decks.filter(isMainDeck);
     const myDecks = decks.filter(isMine);
-    const allOpts = decks.map(d => `<option value="${d.id}">${escapeHtml(d.title)} ${isMine(d) ? '' : '· paylaşılan'}</option>`).join('');
-    const myOpts = myDecks.map(d => `<option value="${d.id}">${escapeHtml(d.title)}</option>`).join('');
-    $('studyDeckSelect').innerHTML = placeholder + allOpts;
-    $('cardDeckSelect').innerHTML = placeholder + myOpts;
-    $('importDeckSelect').innerHTML = placeholder + myOpts;
+    const myMainDecks = myDecks.filter(isMainDeck);
+
+    if ($('studyMainDeckSelect')) {
+      $('studyMainDeckSelect').innerHTML = '<option value="">Tüm büyük desteler</option>' + mainDecks.map(d => `<option value="${d.id}">${escapeHtml(d.title)} ${isMine(d) ? '' : '· paylaşılan'}</option>`).join('');
+      renderStudySubOptions();
+    }
+
+    if ($('subDeckParentSelect')) {
+      $('subDeckParentSelect').innerHTML = placeholder + myMainDecks.map(d => `<option value="${d.id}">${escapeHtml(d.title)}</option>`).join('');
+    }
+
+    const deckOptionHtml = myMainDecks.map(main => {
+      const children = childDecks(main.id).filter(isMine);
+      const childOptions = children.map(ch => `<option value="${ch.id}">↳ ${escapeHtml(ch.title)}</option>`).join('');
+      return `<optgroup label="${escapeHtml(main.title)}"><option value="${main.id}">${escapeHtml(main.title)} · genel</option>${childOptions}</optgroup>`;
+    }).join('');
+    $('cardDeckSelect').innerHTML = '<option value="">Küçük deste seç</option>' + deckOptionHtml;
+    $('importDeckSelect').innerHTML = '<option value="">Küçük deste seç</option>' + deckOptionHtml;
+  }
+
+  function renderStudySubOptions() {
+    if (!$('studyMainDeckSelect') || !$('studySubDeckSelect')) return;
+    const mainId = $('studyMainDeckSelect').value;
+    if (!mainId) {
+      $('studySubDeckSelect').innerHTML = '<option value="">Alt konu: tümü</option>';
+      $('studySubDeckSelect').disabled = true;
+      return;
+    }
+    const children = childDecks(mainId);
+    $('studySubDeckSelect').disabled = false;
+    $('studySubDeckSelect').innerHTML = '<option value="">Bu büyük destenin tüm alt konuları</option>' + children.map(ch => `<option value="${ch.id}">${escapeHtml(ch.title)} ${isMine(ch) ? '' : '· paylaşılan'}</option>`).join('');
   }
 
   function renderDeckList() {
@@ -438,69 +531,76 @@
       $('decksList').innerHTML = 'Henüz deste yok.';
       return;
     }
-    const myDecks = decks.filter(isMine);
-    const sharedDecks = decks.filter(d => !isMine(d));
-    const renderRows = list => list.map(d => {
-      const count = cards.filter(c => c.deckId === d.id).length;
-      const actions = isMine(d)
-        ? `<button class="btn danger small" onclick="removeDeck('${d.id}')">Sil</button>`
-        : `<button class="btn secondary small" onclick="copySharedDeck('${d.id}')">Kopyala</button>`;
-      return `
-        <div class="deck-row" style="display:flex;gap:8px;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px;background:rgba(148,163,184,.08)">
-          <div>
-            <strong>${escapeHtml(d.title || 'Adsız deste')}</strong> ${ownerBadge(d)}<br>
-            <span class="muted small">${count} kart · ${escapeHtml(ownerText(d))}${d.description ? ' · ' + escapeHtml(d.description) : ''}</span>
-          </div>
-          ${actions}
-        </div>
-      `;
-    }).join('');
+    const mainDecks = decks.filter(isMainDeck);
+    const renderActions = d => isMine(d)
+      ? `<button class="btn danger small" onclick="removeDeck('${d.id}')">Sil</button>`
+      : `<button class="btn secondary small" onclick="copySharedDeck('${d.id}')">Kopyala</button>`;
 
-    $('decksList').innerHTML = `
-      <h4 style="margin:10px 0 8px">Benim destelerim</h4>
-      ${myDecks.length ? renderRows(myDecks) : '<div class="muted small">Henüz kendi desten yok.</div>'}
-      <h4 style="margin:16px 0 8px">Paylaşılan desteler</h4>
-      ${sharedDecks.length ? renderRows(sharedDecks) : '<div class="muted small">Başka kullanıcı destesi yok.</div>'}
-    `;
+    $('decksList').innerHTML = mainDecks.map(main => {
+      const children = childDecks(main.id);
+      const mainCount = countCardsForDeckTree(main.id);
+      const childHtml = children.map(ch => {
+        const count = cards.filter(c => c.deckId === ch.id).length;
+        return `<div class="deck-tree-child">
+          <div class="flex" style="justify-content:space-between">
+            <div><strong>${escapeHtml(ch.title || 'Adsız küçük deste')}</strong> ${ownerBadge(ch)} <span class="mini-label">küçük deste</span><br>
+            <span class="muted small">${count} kart · ${escapeHtml(ownerText(ch))}${ch.description ? ' · ' + escapeHtml(ch.description) : ''}</span></div>
+            ${renderActions(ch)}
+          </div>
+        </div>`;
+      }).join('') || '<div class="muted small" style="margin:8px 0 0 18px">Henüz küçük deste yok. Kartları doğrudan büyük desteye de ekleyebilirsin; ancak alt konu oluşturman önerilir.</div>';
+      return `<div class="deck-tree-main">
+        <div class="flex" style="justify-content:space-between">
+          <div><strong>${escapeHtml(main.title || 'Adsız büyük deste')}</strong> ${ownerBadge(main)} <span class="mini-label">büyük deste</span><br>
+          <span class="muted small">${mainCount} kart toplam · ${escapeHtml(ownerText(main))}${main.description ? ' · ' + escapeHtml(main.description) : ''}</span></div>
+          ${renderActions(main)}
+        </div>
+        ${childHtml}
+      </div>`;
+    }).join('');
   }
 
   function renderDeckCloud() {
     const cloudTargets = ['deckCloud', 'deckCloudApp'].map(id => $(id)).filter(Boolean);
     if (!cloudTargets.length) return;
-    const myDecks = decks.filter(isMine);
-    const sharedDecks = decks.filter(d => !isMine(d));
-    if ($('deckCloudSummary')) $('deckCloudSummary').textContent = `${decks.length} deste · ${myDecks.length} benim · ${sharedDecks.length} paylaşılan`;
-    if (!decks.length) {
-      cloudTargets.forEach(el => el.innerHTML = 'Henüz deste yok. İlk desteyi “Kartlar” bölümünden oluşturabilirsin.');
+    const mainDecks = decks.filter(isMainDeck);
+    const myMainDecks = mainDecks.filter(isMine);
+    const sharedMainDecks = mainDecks.filter(d => !isMine(d));
+    if ($('deckCloudSummary')) $('deckCloudSummary').textContent = `${mainDecks.length} büyük deste · ${myMainDecks.length} benim · ${sharedMainDecks.length} paylaşılan`;
+    if (!mainDecks.length) {
+      cloudTargets.forEach(el => el.innerHTML = 'Henüz büyük deste yok. İlk büyük desteyi “Kartlar” bölümünden oluşturabilirsin.');
       return;
     }
     const renderChip = d => {
-      const count = cards.filter(c => c.deckId === d.id).length;
-      const due = cards.filter(c => c.deckId === d.id && (isMine(c) ? toDate(c.dueDate) <= now() : true)).length;
+      const count = countCardsForDeckTree(d.id);
+      const due = dueCardsForDeckTree(d.id);
+      const subCount = childDecks(d.id).length;
       const actionText = isMine(d) ? 'Çalış' : 'İncele / kopyala';
       return `<button class="deck-chip" onclick="selectDeckFromCloud('${d.id}')" title="${escapeHtml(ownerText(d))}">
-        ${escapeHtml(d.title || 'Adsız deste')}
+        ${escapeHtml(d.title || 'Adsız büyük deste')}
         ${ownerBadge(d)}
-        <span class="count">${count} kart${due ? ' · ' + due + (isMine(d) ? ' bugün' : ' görülebilir') : ''} · ${actionText}</span>
+        <span class="count">${subCount} küçük deste · ${count} kart${due ? ' · ' + due + (isMine(d) ? ' bugün' : ' görülebilir') : ''} · ${actionText}</span>
       </button>`;
     };
     const html = `
       <div style="margin-bottom:8px">
-        <strong class="small">Benim destelerim</strong><br>
-        ${myDecks.length ? myDecks.map(renderChip).join('') : '<span class="muted small">Henüz kendi desten yok.</span>'}
+        <strong class="small">Benim büyük destelerim</strong><br>
+        ${myMainDecks.length ? myMainDecks.map(renderChip).join('') : '<span class="muted small">Henüz kendi büyük desten yok.</span>'}
       </div>
       <div style="margin-top:10px">
-        <strong class="small">Paylaşılan desteler</strong><br>
-        ${sharedDecks.length ? sharedDecks.map(renderChip).join('') : '<span class="muted small">Henüz başka kullanıcıya ait deste yok. Başka kullanıcılar deste oluşturduğunda burada görünecek.</span>'}
+        <strong class="small">Paylaşılan büyük desteler</strong><br>
+        ${sharedMainDecks.length ? sharedMainDecks.map(renderChip).join('') : '<span class="muted small">Henüz başka kullanıcıya ait büyük deste yok. Başka kullanıcılar oluşturduğunda burada görünecek.</span>'}
       </div>
     `;
     cloudTargets.forEach(el => el.innerHTML = html);
   }
 
   window.selectDeckFromCloud = id => {
-    if ($('studyDeckSelect')) $('studyDeckSelect').value = id;
-    if ($('cardDeckSelect')) $('cardDeckSelect').value = id;
-    if ($('importDeckSelect')) $('importDeckSelect').value = id;
+    if ($('studyMainDeckSelect')) {
+      $('studyMainDeckSelect').value = id;
+      renderStudySubOptions();
+      $('studySubDeckSelect').value = '';
+    }
     switchView('study');
     prepareStudy();
   };
@@ -509,12 +609,13 @@
     const d = decks.find(x => x.id === id);
     if (!d) return;
     if (!isMine(d)) return showMessage('Paylaşılan desteleri silemezsin. İstersen kendi hesabına kopyalayabilirsin.', 'error');
-    const deckCards = cards.filter(c => c.deckId === id && isMine(c));
-    const msg = deckCards.length
-      ? `“${d.title}” destesini ve içindeki ${deckCards.length} kartı silmek istiyor musun? Bu işlem geri alınamaz.`
-      : `“${d.title}” destesi silinsin mi?`;
+    const ids = isMainDeck(d) ? deckIdsUnder(id) : [id];
+    const deckCards = cards.filter(c => ids.includes(c.deckId) && isMine(c));
+    const deckCount = ids.length;
+    const msg = `“${d.title}” ${isMainDeck(d) ? 'büyük destesi' : 'küçük destesi'} silinsin mi? ${deckCount > 1 ? deckCount + ' deste ve ' : ''}${deckCards.length} kart arşivlenecek.`;
     if (!confirm(msg)) return;
     await Promise.all(deckCards.map(c => updateDoc(doc(db, 'cards', c.id), { isDeleted: true, updatedAt: serverTimestamp() })));
+    await Promise.all(ids.filter(x => x !== id).map(childId => deleteDoc(doc(db, 'decks', childId))));
     await deleteDoc(doc(db, 'decks', id));
     await loadAll();
     showMessage('Deste silindi.');
@@ -523,24 +624,46 @@
   window.copySharedDeck = async id => {
     const d = decks.find(x => x.id === id);
     if (!d) return;
-    const deckCards = cards.filter(c => c.deckId === id && !c.isDeleted);
+    const sourceIds = isMainDeck(d) ? deckIdsUnder(id) : [id];
+    const deckCards = cards.filter(c => sourceIds.includes(c.deckId) && !c.isDeleted);
     if (!deckCards.length) return showMessage('Bu destede kopyalanacak kart bulunamadı.', 'error');
-    if (!confirm(`“${d.title}” destesindeki ${deckCards.length} kart kendi hesabına kopyalansın mı?`)) return;
-    const newDeckRef = await addDoc(collection(db, 'decks'), {
-      userId: currentUser.uid,
-      ownerEmail: currentUser.email || '',
-      title: `${d.title || 'Adsız deste'} (Kopya)`,
-      description: d.description || 'Paylaşılan desteden kopyalandı.',
-      sourceDeckId: d.id,
-      sourceOwnerId: d.userId || '',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
+    if (!confirm(`“${d.title}” başlığı altındaki ${deckCards.length} kart kendi hesabına kopyalansın mı?`)) return;
+    const idMap = new Map();
+    const roots = sourceIds.map(getDeck).filter(Boolean).filter(x => isMainDeck(x) || x.id === id);
+    for (const root of roots) {
+      const newRef = await addDoc(collection(db, 'decks'), {
+        userId: currentUser.uid,
+        ownerEmail: currentUser.email || '',
+        title: `${root.title || 'Adsız deste'} (Kopya)`,
+        description: root.description || 'Paylaşılan desteden kopyalandı.',
+        parentId: '',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        sourceDeckId: root.id,
+        sourceOwnerId: root.userId || ''
+      });
+      idMap.set(root.id, newRef.id);
+      for (const child of childDecks(root.id)) {
+        if (!sourceIds.includes(child.id)) continue;
+        const chRef = await addDoc(collection(db, 'decks'), {
+          userId: currentUser.uid,
+          ownerEmail: currentUser.email || '',
+          title: child.title || 'Adsız küçük deste',
+          description: child.description || '',
+          parentId: newRef.id,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          sourceDeckId: child.id,
+          sourceOwnerId: child.userId || ''
+        });
+        idMap.set(child.id, chRef.id);
+      }
+    }
     for (const c of deckCards) {
       await addDoc(collection(db, 'cards'), {
         userId: currentUser.uid,
         ownerEmail: currentUser.email || '',
-        deckId: newDeckRef.id,
+        deckId: idMap.get(c.deckId) || idMap.get(d.id),
         front: c.front || '',
         back: c.back || '',
         explanation: c.explanation || '',
@@ -559,24 +682,47 @@
       });
     }
     await loadAll();
-    showMessage(`Deste kopyalandı. Artık kendi kopyanı düzenleyebilir ve çalışabilirsin.`);
+    showMessage('Deste yapısı ve kartlar kopyalandı. Artık kendi kopyanı düzenleyebilirsin.');
   };
 
-  $('addDeckBtn').onclick = async () => {
-    const title = $('deckTitle').value.trim();
-    if (!title) return showMessage('Deste adı boş olamaz.', 'error');
+  $('addMainDeckBtn').onclick = async () => {
+    const title = $('mainDeckTitle').value.trim();
+    if (!title) return showMessage('Büyük deste adı boş olamaz.', 'error');
     await addDoc(collection(db, 'decks'), {
       userId: currentUser.uid,
       ownerEmail: currentUser.email || '',
       title,
-      description: $('deckDescription').value.trim(),
+      description: $('mainDeckDescription').value.trim(),
+      parentId: '',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    $('deckTitle').value = '';
-    $('deckDescription').value = '';
+    $('mainDeckTitle').value = '';
+    $('mainDeckDescription').value = '';
     await loadAll();
-    showMessage('Deste eklendi.');
+    showMessage('Büyük deste eklendi. Şimdi bu büyük deste altında küçük desteler oluşturabilirsin.');
+  };
+
+  $('addSubDeckBtn').onclick = async () => {
+    const parentId = $('subDeckParentSelect').value;
+    const title = $('subDeckTitle').value.trim();
+    if (!parentId) return showMessage('Küçük deste için önce bir büyük deste seçmelisin.', 'error');
+    if (!title) return showMessage('Küçük deste adı boş olamaz.', 'error');
+    const parent = decks.find(d => d.id === parentId);
+    if (!parent || !isMine(parent)) return showMessage('Sadece kendi büyük destenin altına küçük deste ekleyebilirsin.', 'error');
+    await addDoc(collection(db, 'decks'), {
+      userId: currentUser.uid,
+      ownerEmail: currentUser.email || '',
+      title,
+      description: $('subDeckDescription').value.trim(),
+      parentId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    $('subDeckTitle').value = '';
+    $('subDeckDescription').value = '';
+    await loadAll();
+    showMessage('Küçük deste eklendi.');
   };
 
   $('saveCardBtn').onclick = async () => {
@@ -696,12 +842,18 @@
   }
 
   function prepareStudy() {
-    const deckId = $('studyDeckSelect').value;
-    dueCards = cards.filter(c => (!deckId || c.deckId === deckId) && (isMine(c) ? toDate(c.dueDate) <= now() : true));
+    renderStudySubOptions();
+    const mainId = $('studyMainDeckSelect')?.value || '';
+    const subId = $('studySubDeckSelect')?.value || '';
+    let allowedDeckIds = null;
+    if (subId) allowedDeckIds = [subId];
+    else if (mainId) allowedDeckIds = deckIdsUnder(mainId);
+    dueCards = cards.filter(c => (!allowedDeckIds || allowedDeckIds.includes(c.deckId)) && (isMine(c) ? toDate(c.dueDate) <= now() : true));
     currentStudyIndex = 0;
     renderStudyCard();
   }
-  $('studyDeckSelect').onchange = prepareStudy;
+  $('studyMainDeckSelect').onchange = () => { renderStudySubOptions(); prepareStudy(); };
+  $('studySubDeckSelect').onchange = prepareStudy;
 
   function renderStudyCard() {
     const c = dueCards[currentStudyIndex];
@@ -709,6 +861,11 @@
     $('studyEmpty').classList.toggle('hidden', !empty);
     $('studyBox').classList.toggle('hidden', empty);
     $('studyControls').classList.toggle('hidden', empty);
+    $('studyTools').classList.toggle('hidden', empty);
+    $('studyProgressText').textContent = empty ? '0 / 0' : `${currentStudyIndex + 1} / ${dueCards.length}`;
+    const mainId = $('studyMainDeckSelect')?.value || '';
+    const subId = $('studySubDeckSelect')?.value || '';
+    $('studyDeckPath').textContent = subId ? deckPath(subId) : mainId ? deckPath(mainId) + ' / tüm alt konular' : 'Tüm desteler';
     if (empty) return;
     $('studyFront').textContent = c.front;
     $('studyBack').textContent = c.back;
@@ -717,12 +874,51 @@
     $('studyAnswer').classList.add('hidden');
     $('showAnswerBtn').classList.remove('hidden');
     document.querySelectorAll('.rateBtn').forEach(b => b.classList.add('hidden'));
+    $('prevCardBtn').disabled = currentStudyIndex <= 0;
+    $('nextCardBtn').disabled = currentStudyIndex >= dueCards.length - 1;
+    $('editStudyCardBtn').disabled = !isMine(c);
+    $('deleteStudyCardBtn').disabled = !isMine(c);
   }
 
   $('showAnswerBtn').onclick = () => {
     $('studyAnswer').classList.remove('hidden');
     $('showAnswerBtn').classList.add('hidden');
     document.querySelectorAll('.rateBtn').forEach(b => b.classList.remove('hidden'));
+  };
+
+  $('prevCardBtn').onclick = () => {
+    if (currentStudyIndex > 0) {
+      currentStudyIndex--;
+      renderStudyCard();
+    }
+  };
+  $('nextCardBtn').onclick = () => {
+    if (currentStudyIndex < dueCards.length - 1) {
+      currentStudyIndex++;
+      renderStudyCard();
+    }
+  };
+  $('editStudyCardBtn').onclick = () => {
+    const c = dueCards[currentStudyIndex];
+    if (!c) return;
+    if (!isMine(c)) return showMessage('Paylaşılan kartları düzenleyemezsin. Önce desteyi kendi hesabına kopyala.', 'error');
+    switchView('manage');
+    editCard(c.id);
+  };
+  $('deleteStudyCardBtn').onclick = async () => {
+    const c = dueCards[currentStudyIndex];
+    if (!c) return;
+    if (!isMine(c)) return showMessage('Paylaşılan kartları silemezsin.', 'error');
+    if (!confirm('Bu kart çalışma sırasında silinsin mi?')) return;
+    await updateDoc(doc(db, 'cards', c.id), { isDeleted: true, updatedAt: serverTimestamp() });
+    dueCards.splice(currentStudyIndex, 1);
+    if (currentStudyIndex >= dueCards.length) currentStudyIndex = Math.max(0, dueCards.length - 1);
+    await loadCards();
+    renderStats();
+    renderCards();
+    renderDeckCloud();
+    renderStudyCard();
+    showMessage('Kart silindi.');
   };
 
   document.querySelectorAll('.rateBtn').forEach(btn => btn.onclick = async () => {
@@ -746,6 +942,7 @@
       });
       await loadCards();
       renderStats();
+      renderDeckCloud();
     } else {
       showMessage('Bu paylaşılan kart salt okunur çalışıldı. İlerleme kaydı için desteyi kendi hesabına kopyala.');
     }
