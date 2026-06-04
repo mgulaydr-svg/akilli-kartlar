@@ -193,14 +193,35 @@
         </div>
       </div>
 
+      <div id="studySetupView" class="hidden">
+        <div class="card">
+          <h2>Çalışılacak desteyi seç</h2>
+          <p class="muted small">Mobilde çalışma ekranı sade kalsın diye deste seçimini burada yapıyoruz. Önce büyük desteyi seç; istersen sonra küçük deste seç. Küçük deste seçmezsen büyük destenin tüm alt konuları birlikte çalışılır.</p>
+          <div class="grid grid-2" style="margin-top:12px">
+            <div>
+              <label>Büyük deste</label>
+              <select id="studyMainDeckSelect"></select>
+            </div>
+            <div>
+              <label>Küçük deste / alt konu</label>
+              <select id="studySubDeckSelect"></select>
+            </div>
+          </div>
+          <div class="notice" id="studySetupInfo" style="margin-top:12px">Çalışmak için bir büyük deste seçebilir veya tüm desteleri çalışabilirsin.</div>
+          <div class="flex" style="margin-top:12px">
+            <button class="btn" id="startStudyBtn">Çalışmaya Başla</button>
+            <button class="btn secondary" id="studyAllDecksBtn">Tüm desteler</button>
+            <button class="btn secondary" data-view="dashboard">Panele dön</button>
+          </div>
+        </div>
+      </div>
+
       <div id="studyView" class="hidden">
         <div class="card">
           <div class="flex">
             <h2>Çalışma Ekranı</h2>
-            <select id="studyMainDeckSelect" style="max-width:260px" class="right"></select>
-            <select id="studySubDeckSelect" style="max-width:260px"></select>
+            <button class="btn secondary right" id="backToStudySetupBtn">Deste seçimine dön</button>
           </div>
-          <p class="muted small" style="margin-top:6px">Önce büyük desteyi, sonra çalışmak istediğin küçük desteyi seç. Küçük deste seçmezsen büyük destenin tüm alt konuları birlikte çalışılır.</p>
           <div class="study-meta">
             <span id="studyDeckPath">Tüm desteler</span>
             <span id="studyProgressText">0 / 0</span>
@@ -227,7 +248,6 @@
             <button class="btn secondary" id="nextCardBtn">İleri →</button>
             <button class="btn secondary" id="editStudyCardBtn">Kartı düzenle</button>
             <button class="btn danger" id="deleteStudyCardBtn">Kartı sil</button>
-            <select id="studyCardDeckSelect" style="max-width:280px"></select>
             <button class="btn secondary" id="moveStudyCardBtn">Desteyi değiştir</button>
           </div>
         </div>
@@ -274,8 +294,14 @@
             <h2>Kart ekle / düzenle <span id="editStatus" class="edit-badge hidden">Düzenleme modu</span></h2>
             <input id="editingCardId" type="hidden">
             <div class="form-row">
-              <label>Deste</label>
-              <select id="cardDeckSelect"></select>
+              <label>Büyük deste</label>
+              <select id="cardMainDeckSelect"></select>
+            </div>
+            <div class="form-row">
+              <label>Küçük deste / alt konu</label>
+              <select id="cardSubDeckSelect"></select>
+              <p class="muted small" style="margin-top:6px">Küçük deste seçmezsen kart büyük destenin genel bölümüne eklenir.</p>
+              <select id="cardDeckSelect" class="hidden"></select>
             </div>
             <div class="form-row">
               <label>Soru / Kavram</label>
@@ -326,8 +352,14 @@
           <p class="muted">CSV, JSON veya TXT dosyası yükleyebilirsin. Kartlar önce önizleme olarak gösterilir.</p>
           <div class="grid grid-2">
             <div>
-              <label>Deste</label>
-              <select id="importDeckSelect"></select>
+              <label>Büyük deste</label>
+              <select id="importMainDeckSelect"></select>
+            </div>
+            <div>
+              <label>Küçük deste / alt konu</label>
+              <select id="importSubDeckSelect"></select>
+              <p class="muted small" style="margin-top:6px">Önce büyük deste seçilir. Küçük deste seçmezsen kartlar büyük deste/genel içine yüklenir.</p>
+              <select id="importDeckSelect" class="hidden"></select>
             </div>
             <div>
               <label>Dosya</label>
@@ -374,6 +406,33 @@
         <div id="modalExampleWrap" class="modal-section hidden">
           <h3>Örnek</h3>
           <div id="modalExampleText" class="modal-text"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="moveDeckModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="moveDeckModalTitle">
+      <div class="modal-card">
+        <div class="flex">
+          <div>
+            <h2 id="moveDeckModalTitle">Kartın destesini değiştir</h2>
+            <p class="muted small" id="moveDeckModalCard" style="margin:4px 0 0"></p>
+          </div>
+          <button class="btn secondary modal-close" id="closeMoveDeckModalBtn">Kapat</button>
+        </div>
+        <div class="grid grid-2" style="margin-top:12px">
+          <div>
+            <label>Büyük deste</label>
+            <select id="moveMainDeckSelect"></select>
+          </div>
+          <div>
+            <label>Küçük deste / alt konu</label>
+            <select id="moveSubDeckSelect"></select>
+            <p class="muted small" style="margin-top:6px">Küçük deste seçmezsen kart büyük deste/genel içine taşınır.</p>
+          </div>
+        </div>
+        <div class="flex" style="margin-top:14px">
+          <button class="btn" id="confirmMoveDeckBtn">Taşı</button>
+          <button class="btn secondary" id="cancelMoveDeckBtn">Vazgeç</button>
         </div>
       </div>
     </div>
@@ -428,12 +487,13 @@
   if (localStorage.getItem('theme') === 'dark') document.body.classList.add('dark');
 
   function switchView(view) {
-    ['dashboard','study','manage','import'].forEach(v => $(v+'View').classList.toggle('hidden', v !== view));
+    ['dashboard','studySetup','study','manage','import'].forEach(v => $(v+'View').classList.toggle('hidden', v !== view));
+    if (view === 'studySetup') renderStudySetup();
     if (view === 'study') prepareStudy();
     if (view === 'dashboard') renderStats();
     if (view === 'manage') renderCards();
   }
-  document.querySelectorAll('[data-view]').forEach(btn => btn.onclick = () => { if (btn.dataset.view === 'study') studyMode = 'due'; switchView(btn.dataset.view); });
+  document.querySelectorAll('[data-view]').forEach(btn => btn.onclick = () => { if (btn.dataset.view === 'study') { studyMode = 'due'; switchView('studySetup'); } else switchView(btn.dataset.view); });
 
   function openExplanationModal(card) {
     if (!card) return;
@@ -451,7 +511,7 @@
   }
   $('closeExplanationModalBtn').onclick = closeExplanationModal;
   $('explanationModal').onclick = e => { if (e.target.id === 'explanationModal') closeExplanationModal(); };
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeExplanationModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeExplanationModal(); if ($('moveDeckModal')) closeMoveDeckModal?.(); } });
   $('openExplanationBtn').onclick = () => openExplanationModal(activeStudyCardForModal);
 
   $('loginBtn').onclick = async () => {
@@ -554,42 +614,63 @@
     return cards.filter(c => ids.includes(c.deckId) && (isMine(c) ? toDate(c.dueDate) <= now() : true)).length;
   }
 
+  function optionLabel(d) {
+    return `${escapeHtml(d.title || 'Adsız deste')}${isMine(d) ? '' : ' · paylaşılan'}`;
+  }
+  function setMainSelect(id, includeShared=true, allLabel='Seç') {
+    const el = $(id);
+    if (!el) return;
+    const source = decks.filter(isMainDeck).filter(d => includeShared || isMine(d));
+    el.innerHTML = `<option value="">${allLabel}</option>` + source.map(d => `<option value="${d.id}">${optionLabel(d)}</option>`).join('');
+  }
+  function setSubSelect(mainSelectId, subSelectId, includeShared=true, allLabel='Küçük deste seçilmedi') {
+    const mainEl = $(mainSelectId), subEl = $(subSelectId);
+    if (!mainEl || !subEl) return;
+    const mainId = mainEl.value;
+    if (!mainId) {
+      subEl.innerHTML = `<option value="">Önce büyük deste seç</option>`;
+      subEl.disabled = true;
+      return;
+    }
+    const children = childDecks(mainId).filter(d => includeShared || isMine(d));
+    subEl.disabled = false;
+    subEl.innerHTML = `<option value="">${allLabel}</option>` + children.map(ch => `<option value="${ch.id}">${optionLabel(ch)}</option>`).join('');
+  }
+  function syncCardDeckHidden() {
+    if (!$('cardDeckSelect')) return;
+    $('cardDeckSelect').value = $('cardSubDeckSelect')?.value || $('cardMainDeckSelect')?.value || '';
+  }
+  function syncImportDeckHidden() {
+    if (!$('importDeckSelect')) return;
+    $('importDeckSelect').value = $('importSubDeckSelect')?.value || $('importMainDeckSelect')?.value || '';
+  }
+
   function renderDeckOptions() {
     const placeholder = '<option value="">Seç</option>';
-    const mainDecks = decks.filter(isMainDeck);
-    const myDecks = decks.filter(isMine);
-    const myMainDecks = myDecks.filter(isMainDeck);
+    const myMainDecks = decks.filter(isMine).filter(isMainDeck);
 
-    if ($('studyMainDeckSelect')) {
-      $('studyMainDeckSelect').innerHTML = '<option value="">Tüm büyük desteler</option>' + mainDecks.map(d => `<option value="${d.id}">${escapeHtml(d.title)} ${isMine(d) ? '' : '· paylaşılan'}</option>`).join('');
-      renderStudySubOptions();
-    }
+    setMainSelect('studyMainDeckSelect', true, 'Tüm büyük desteler');
+    renderStudySubOptions();
 
     if ($('subDeckParentSelect')) {
       $('subDeckParentSelect').innerHTML = placeholder + myMainDecks.map(d => `<option value="${d.id}">${escapeHtml(d.title)}</option>`).join('');
     }
 
-    const deckOptionHtml = myMainDecks.map(main => {
-      const children = childDecks(main.id).filter(isMine);
-      const childOptions = children.map(ch => `<option value="${ch.id}">↳ ${escapeHtml(ch.title)}</option>`).join('');
-      return `<optgroup label="${escapeHtml(main.title)}"><option value="${main.id}">${escapeHtml(main.title)} · genel</option>${childOptions}</optgroup>`;
-    }).join('');
-    $('cardDeckSelect').innerHTML = '<option value="">Küçük deste seç</option>' + deckOptionHtml;
-    $('importDeckSelect').innerHTML = '<option value="">Küçük deste seç</option>' + deckOptionHtml;
-    if ($('studyCardDeckSelect')) $('studyCardDeckSelect').innerHTML = '<option value="">Kartın destesini değiştir</option>' + deckOptionHtml;
+    setMainSelect('cardMainDeckSelect', false, 'Büyük deste seç');
+    setSubSelect('cardMainDeckSelect', 'cardSubDeckSelect', false, 'Büyük deste/genel');
+    syncCardDeckHidden();
+    setMainSelect('importMainDeckSelect', false, 'Büyük deste seç');
+    setSubSelect('importMainDeckSelect', 'importSubDeckSelect', false, 'Büyük deste/genel');
+    syncImportDeckHidden();
+    setMainSelect('moveMainDeckSelect', false, 'Büyük deste seç');
+    setSubSelect('moveMainDeckSelect', 'moveSubDeckSelect', false, 'Büyük deste/genel');
   }
 
   function renderStudySubOptions() {
     if (!$('studyMainDeckSelect') || !$('studySubDeckSelect')) return;
-    const mainId = $('studyMainDeckSelect').value;
-    if (!mainId) {
-      $('studySubDeckSelect').innerHTML = '<option value="">Alt konu: tümü</option>';
-      $('studySubDeckSelect').disabled = true;
-      return;
-    }
-    const children = childDecks(mainId);
-    $('studySubDeckSelect').disabled = false;
-    $('studySubDeckSelect').innerHTML = '<option value="">Bu büyük destenin tüm alt konuları</option>' + children.map(ch => `<option value="${ch.id}">${escapeHtml(ch.title)} ${isMine(ch) ? '' : '· paylaşılan'}</option>`).join('');
+    setSubSelect('studyMainDeckSelect', 'studySubDeckSelect', true, 'Bu büyük destenin tüm alt konuları');
+    if (!$('studyMainDeckSelect').value) $('studySubDeckSelect').innerHTML = '<option value="">Tüm alt konular</option>';
+    renderStudySetup();
   }
 
   function renderDeckList() {
@@ -668,8 +749,8 @@
       renderStudySubOptions();
       $('studySubDeckSelect').value = '';
     }
-    switchView('study');
-    prepareStudy();
+    switchView('studySetup');
+    renderStudySetup();
   };
 
   window.removeDeck = async id => {
@@ -796,6 +877,7 @@
   };
 
   $('saveCardBtn').onclick = async () => {
+    syncCardDeckHidden();
     const deckId = $('cardDeckSelect').value;
     const front = $('frontInput').value.trim();
     const back = $('backInput').value.trim();
@@ -846,6 +928,9 @@
   $('clearCardBtn').onclick = clearCardForm;
   function clearCardForm() {
     ['editingCardId','frontInput','backInput','explanationInput','exampleInput','tagsInput'].forEach(id => $(id).value = '');
+    if ($('cardMainDeckSelect')) $('cardMainDeckSelect').value = '';
+    setSubSelect('cardMainDeckSelect', 'cardSubDeckSelect', false, 'Büyük deste/genel');
+    syncCardDeckHidden();
     if ($('editStatus')) $('editStatus').classList.add('hidden');
     if ($('saveCardBtn')) $('saveCardBtn').textContent = 'Kartı kaydet';
   }
@@ -896,6 +981,14 @@
     if (!c) return;
     if (!isMine(c)) return showMessage('Paylaşılan kartları düzenleyemezsin. Önce desteyi kendi hesabına kopyala.', 'error');
     $('editingCardId').value = c.id;
+    const d = decks.find(x => x.id === c.deckId);
+    const main = d?.parentId ? decks.find(x => x.id === d.parentId) : d;
+    if ($('cardMainDeckSelect')) {
+      $('cardMainDeckSelect').value = main?.id || '';
+      setSubSelect('cardMainDeckSelect', 'cardSubDeckSelect', false, 'Büyük deste/genel');
+      $('cardSubDeckSelect').value = d?.parentId ? c.deckId : '';
+      syncCardDeckHidden();
+    }
     $('cardDeckSelect').value = c.deckId;
     $('frontInput').value = c.front || '';
     $('backInput').value = c.back || '';
@@ -932,8 +1025,8 @@
 
   if ($('hardStatCard')) $('hardStatCard').onclick = () => {
     studyMode = 'hard';
-    switchView('study');
-    showMessage('Sadece zor kartlar çalışma moduna geçildi.');
+    switchView('studySetup');
+    showMessage('Sadece zor kartlar için önce çalışılacak büyük/küçük desteyi seç.');
   };
   if ($('learnedStatCard')) $('learnedStatCard').onclick = () => {
     cardListFilter = 'learned';
@@ -946,6 +1039,21 @@
     if (!value) return new Date(0);
     if (value.toDate) return value.toDate();
     return new Date(value);
+  }
+
+  function renderStudySetup() {
+    if (!$('studySetupInfo')) return;
+    const mainId = $('studyMainDeckSelect')?.value || '';
+    const subId = $('studySubDeckSelect')?.value || '';
+    let allowedDeckIds = null;
+    if (subId) allowedDeckIds = [subId];
+    else if (mainId) allowedDeckIds = deckIdsUnder(mainId);
+    const pool = studyMode === 'hard'
+      ? cards.filter(c => isMine(c) && isHard(c) && (!allowedDeckIds || allowedDeckIds.includes(c.deckId)))
+      : cards.filter(c => (!allowedDeckIds || allowedDeckIds.includes(c.deckId)) && !isLearned(c) && (isMine(c) ? toDate(c.dueDate) <= now() : true));
+    const modeText = studyMode === 'hard' ? 'Zor kart modu' : 'Bugün çalışılacak kartlar';
+    const path = subId ? deckPath(subId) : mainId ? deckPath(mainId) + ' / tüm alt konular' : 'Tüm desteler';
+    $('studySetupInfo').innerHTML = `<strong>${escapeHtml(modeText)}</strong><br>${escapeHtml(path)} içinde ${pool.length} kart var.`;
   }
 
   function prepareStudy() {
@@ -965,8 +1073,16 @@
     currentStudyIndex = 0;
     renderStudyCard();
   }
-  $('studyMainDeckSelect').onchange = () => { renderStudySubOptions(); prepareStudy(); };
-  $('studySubDeckSelect').onchange = prepareStudy;
+  $('studyMainDeckSelect').onchange = () => { renderStudySubOptions(); };
+  $('studySubDeckSelect').onchange = renderStudySetup;
+  if ($('startStudyBtn')) $('startStudyBtn').onclick = () => switchView('study');
+  if ($('studyAllDecksBtn')) $('studyAllDecksBtn').onclick = () => { $('studyMainDeckSelect').value=''; renderStudySubOptions(); switchView('study'); };
+  if ($('backToStudySetupBtn')) $('backToStudySetupBtn').onclick = () => switchView('studySetup');
+  if ($('cardMainDeckSelect')) $('cardMainDeckSelect').onchange = () => { setSubSelect('cardMainDeckSelect', 'cardSubDeckSelect', false, 'Büyük deste/genel'); syncCardDeckHidden(); };
+  if ($('cardSubDeckSelect')) $('cardSubDeckSelect').onchange = syncCardDeckHidden;
+  if ($('importMainDeckSelect')) $('importMainDeckSelect').onchange = () => { setSubSelect('importMainDeckSelect', 'importSubDeckSelect', false, 'Büyük deste/genel'); syncImportDeckHidden(); };
+  if ($('importSubDeckSelect')) $('importSubDeckSelect').onchange = syncImportDeckHidden;
+  if ($('moveMainDeckSelect')) $('moveMainDeckSelect').onchange = () => setSubSelect('moveMainDeckSelect', 'moveSubDeckSelect', false, 'Büyük deste/genel');
 
   function renderStudyCard() {
     const c = dueCards[currentStudyIndex];
@@ -994,10 +1110,6 @@
     $('nextCardBtn').disabled = currentStudyIndex >= dueCards.length - 1;
     $('editStudyCardBtn').disabled = !isMine(c);
     $('deleteStudyCardBtn').disabled = !isMine(c);
-    if ($('studyCardDeckSelect')) {
-      $('studyCardDeckSelect').disabled = !isMine(c);
-      $('studyCardDeckSelect').value = isMine(c) ? (c.deckId || '') : '';
-    }
     if ($('moveStudyCardBtn')) $('moveStudyCardBtn').disabled = !isMine(c);
   }
 
@@ -1026,16 +1138,32 @@
     switchView('manage');
     editCard(c.id);
   };
-  $('moveStudyCardBtn').onclick = async () => {
+  function closeMoveDeckModal() { $('moveDeckModal').classList.add('hidden'); }
+  function openMoveDeckModal(card) {
+    if (!card) return;
+    if (!isMine(card)) return showMessage('Paylaşılan kartın destesini değiştiremezsin. Önce desteyi kendi hesabına kopyala.', 'error');
+    $('moveDeckModalCard').textContent = card.front || '';
+    const currentDeck = decks.find(d => d.id === card.deckId);
+    const currentMain = currentDeck?.parentId ? decks.find(d => d.id === currentDeck.parentId) : currentDeck;
+    $('moveMainDeckSelect').value = currentMain?.id || '';
+    setSubSelect('moveMainDeckSelect', 'moveSubDeckSelect', false, 'Büyük deste/genel');
+    $('moveSubDeckSelect').value = currentDeck?.parentId ? currentDeck.id : '';
+    $('moveDeckModal').classList.remove('hidden');
+  }
+  if ($('closeMoveDeckModalBtn')) $('closeMoveDeckModalBtn').onclick = closeMoveDeckModal;
+  if ($('cancelMoveDeckBtn')) $('cancelMoveDeckBtn').onclick = closeMoveDeckModal;
+  if ($('moveDeckModal')) $('moveDeckModal').onclick = e => { if (e.target.id === 'moveDeckModal') closeMoveDeckModal(); };
+  $('moveStudyCardBtn').onclick = () => openMoveDeckModal(dueCards[currentStudyIndex]);
+  if ($('confirmMoveDeckBtn')) $('confirmMoveDeckBtn').onclick = async () => {
     const c = dueCards[currentStudyIndex];
     if (!c) return;
-    if (!isMine(c)) return showMessage('Paylaşılan kartın destesini değiştiremezsin. Önce desteyi kendi hesabına kopyala.', 'error');
-    const newDeckId = $('studyCardDeckSelect').value;
-    if (!newDeckId) return showMessage('Kartı taşıyacağın desteyi seçmelisin.', 'error');
+    const newDeckId = $('moveSubDeckSelect').value || $('moveMainDeckSelect').value;
+    if (!newDeckId) return showMessage('Kartı taşıyacağın büyük desteyi seçmelisin.', 'error');
     const newDeck = decks.find(d => d.id === newDeckId);
     if (!newDeck || !isMine(newDeck)) return showMessage('Kartı sadece kendi destelerine taşıyabilirsin.', 'error');
     if (newDeckId === c.deckId) return showMessage('Kart zaten bu destede.');
     await updateDoc(doc(db, 'cards', c.id), { deckId: newDeckId, updatedAt: serverTimestamp() });
+    closeMoveDeckModal();
     showMessage('Kartın destesi değiştirildi.');
     await loadAll();
     prepareStudy();
@@ -1335,6 +1463,7 @@
   window.toggleImport = (i, checked) => importRows[i].selected = checked;
 
   $('saveImportBtn').onclick = async () => {
+    syncImportDeckHidden();
     const deckId = $('importDeckSelect').value;
     if (!deckId) return showMessage('İçe aktarmak için deste seçmelisin.', 'error');
     const deck = decks.find(d => d.id === deckId);
