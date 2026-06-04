@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Akıllı Kartlar v9</title>
+  <title>Akıllı Kartlar v10</title>
   <style>
     :root {
       --bg: #f5f7fb;
@@ -95,6 +95,13 @@
     .deck-tree-main { border:1px solid var(--border); border-radius:14px; padding:10px; margin-bottom:10px; background:rgba(37,99,235,.05); }
     .deck-tree-child { margin:8px 0 0 18px; padding:8px 10px; border-left:3px solid rgba(37,99,235,.35); background:rgba(148,163,184,.08); border-radius:10px; }
     .mini-label { display:inline-flex; border-radius:999px; border:1px solid var(--border); padding:3px 8px; font-size:11px; color:var(--muted); font-weight:800; }
+
+    .modal { position: fixed; inset: 0; z-index: 1000; display:flex; align-items:center; justify-content:center; padding:18px; background: rgba(15, 23, 42, .58); backdrop-filter: blur(4px); }
+    .modal-card { width:min(720px, 96vw); max-height:86vh; overflow:auto; background: var(--panel); color: var(--text); border:1px solid var(--border); border-radius:24px; padding:20px; box-shadow: var(--soft); }
+    .modal-section { border:1px solid var(--border); border-radius:18px; padding:14px; margin-top:12px; background: rgba(148,163,184,.08); }
+    .modal-section h3 { margin-bottom:8px; }
+    .modal-text { white-space: pre-wrap; line-height:1.55; }
+    .modal-close { margin-left:auto; }
     @media (max-width: 780px) {
       .grid-2, .grid-3 { grid-template-columns: 1fr; }
       .grid-4, .grid-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -203,8 +210,8 @@
             <div class="front" id="studyFront"></div>
             <div id="studyAnswer" class="hidden">
               <div class="back" id="studyBack"></div>
-              <p class="muted" id="studyExplanation"></p>
-              <p class="muted" id="studyExample"></p>
+              <button class="btn secondary hidden" id="openExplanationBtn" style="margin:18px auto 0">Açıklamayı Oku</button>
+              <p class="muted small" id="studySharedNote" style="margin-top:12px"></p>
             </div>
           </div>
           <div class="flex" id="studyControls">
@@ -350,6 +357,26 @@
       </div>
 
     </section>
+
+    <div id="explanationModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="explanationModalTitle">
+      <div class="modal-card">
+        <div class="flex">
+          <div>
+            <h2 id="explanationModalTitle">Açıklama ve Örnekler</h2>
+            <p class="muted small" id="explanationModalFront" style="margin:4px 0 0"></p>
+          </div>
+          <button class="btn secondary modal-close" id="closeExplanationModalBtn">Kapat</button>
+        </div>
+        <div id="modalExplanationWrap" class="modal-section hidden">
+          <h3>Açıklama</h3>
+          <div id="modalExplanationText" class="modal-text"></div>
+        </div>
+        <div id="modalExampleWrap" class="modal-section hidden">
+          <h3>Örnek</h3>
+          <div id="modalExampleText" class="modal-text"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
 <script type="module">
@@ -378,6 +405,7 @@
   let importRows = [];
   let studyMode = 'due';
   let cardListFilter = 'all';
+  let activeStudyCardForModal = null;
 
   const $ = id => document.getElementById(id);
   const showMessage = (text, type='info') => {
@@ -406,6 +434,25 @@
     if (view === 'manage') renderCards();
   }
   document.querySelectorAll('[data-view]').forEach(btn => btn.onclick = () => { if (btn.dataset.view === 'study') studyMode = 'due'; switchView(btn.dataset.view); });
+
+  function openExplanationModal(card) {
+    if (!card) return;
+    $('explanationModalFront').textContent = card.front || '';
+    const hasExplanation = !!String(card.explanation || '').trim();
+    const hasExample = !!String(card.example || '').trim();
+    $('modalExplanationWrap').classList.toggle('hidden', !hasExplanation);
+    $('modalExampleWrap').classList.toggle('hidden', !hasExample);
+    $('modalExplanationText').textContent = card.explanation || '';
+    $('modalExampleText').textContent = card.example || '';
+    $('explanationModal').classList.remove('hidden');
+  }
+  function closeExplanationModal() {
+    $('explanationModal').classList.add('hidden');
+  }
+  $('closeExplanationModalBtn').onclick = closeExplanationModal;
+  $('explanationModal').onclick = e => { if (e.target.id === 'explanationModal') closeExplanationModal(); };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeExplanationModal(); });
+  $('openExplanationBtn').onclick = () => openExplanationModal(activeStudyCardForModal);
 
   $('loginBtn').onclick = async () => {
     try { await signInWithEmailAndPassword(auth, $('emailInput').value.trim(), $('passwordInput').value); }
@@ -924,7 +971,6 @@
   function renderStudyCard() {
     const c = dueCards[currentStudyIndex];
     const empty = !c;
-    if ($('studyEmpty')) $('studyEmpty').textContent = studyMode === 'hard' ? 'Bu seçimde zor kart yok. Zor kartlar oluştuğunda buradan çalışabilirsin.' : 'Bugün çalışılacak kart yok. Yeni kart ekleyebilir veya farklı bir deste seçebilirsin.';
     $('studyEmpty').classList.toggle('hidden', !empty);
     $('studyBox').classList.toggle('hidden', empty);
     $('studyControls').classList.toggle('hidden', empty);
@@ -934,11 +980,13 @@
     const subId = $('studySubDeckSelect')?.value || '';
     const modeText = studyMode === 'hard' ? 'Zor kartlar · ' : '';
     $('studyDeckPath').textContent = modeText + (subId ? deckPath(subId) : mainId ? deckPath(mainId) + ' / tüm alt konular' : 'Tüm desteler');
-    if (empty) return;
+    if (empty) { activeStudyCardForModal = null; return; }
+    activeStudyCardForModal = c;
     $('studyFront').textContent = c.front;
     $('studyBack').textContent = c.back;
-    $('studyExplanation').textContent = c.explanation ? 'Açıklama: ' + c.explanation : '';
-    $('studyExample').textContent = (c.example ? 'Örnek: ' + c.example : '') + (!isMine(c) ? '  ·  Paylaşılan kart: ilerleme kaydedilmez. Düzenlemek/ilerleme tutmak için desteyi kopyala.' : '');
+    const hasDetail = !!String(c.explanation || '').trim() || !!String(c.example || '').trim();
+    $('openExplanationBtn').classList.toggle('hidden', !hasDetail);
+    $('studySharedNote').textContent = !isMine(c) ? 'Paylaşılan kart: ilerleme kaydedilmez. Düzenlemek/ilerleme tutmak için desteyi kopyala.' : '';
     $('studyAnswer').classList.add('hidden');
     $('showAnswerBtn').classList.remove('hidden');
     document.querySelectorAll('.rateBtn').forEach(b => b.classList.add('hidden'));
